@@ -12,7 +12,7 @@ int main(int argc, char *argv[])
   std::ifstream entrada (argv[1]);
   std::string S, R;
   int n, m, resultado;
-  
+
   // Leitura do arquivo de entrada
   if (entrada.is_open())
   {
@@ -26,20 +26,20 @@ int main(int argc, char *argv[])
     std::cout << "Arquivo não encontrado!\n";
     return -1;
   }
-  
+
   int nElementos = (n+1) * (m+1);
   int nBytes = nElementos * sizeof(int);
 
   // Aloca matriz no host
   int *h_D = (int *) malloc(nBytes);
-  
-  // Inicializa matriz 
+
+  // Inicializa matriz
   for (int i = 0, j = 0; i <= nElementos; i += m+1, ++j)
     h_D[i] = j;
   for (int j = 0; j <= m; ++j)
     h_D[j] = j;
-  
-  // Aloca matriz na memória global do kernel 
+
+  // Aloca matriz na memória global do kernel
   int *d_D;
   cudaMalloc(&d_D, nBytes);
 
@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
   //NomeDaFuncao<<<1, threadsPerBlock>>>(<params>);
 
   //cudaMemcpy(resultado, d_D, sizeof(int), cudaMemcpyDeviceToHost);
-  
+
   // Libera matrizes
   free(h_D);
   cudaFree(d_D);
