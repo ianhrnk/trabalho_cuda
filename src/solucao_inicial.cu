@@ -1,12 +1,12 @@
 /********************************************************************************
  * Trabalho 2: Programação Paralela para Processador Many-core (GPU) Usando CUDA
+ * Professora: Nahri Moreano
  * Aluno: Ian Haranaka | RGA: 2018.1904.009-7
  * Comando de compilação: nvcc solucao_inicial.cu -o solucao_inicial
  ********************************************************************************/
 
 #include <iostream>
 #include <fstream>
-#include <string>
 
 char *AlocaSequencia(int n);
 __global__ void DistanciaEdicao(int n, int m, char *S, char *R, int *D);
