@@ -68,16 +68,16 @@ int main(int argc, char *argv[])
 
 char *AlocaSequencia(int n)
 {
-	char *seq;
+  char *seq;
 
-	seq = (char *) malloc((n+1) * sizeof(char));
-	if (seq == NULL)
-	{
+  seq = (char *) malloc((n+1) * sizeof(char));
+  if (seq == NULL)
+  {
     std::cout << "Erro na alocação de estruturas!\n";
-		std::exit(1);
-	}
+    std::exit(1);
+  }
   seq[0] = ' ';
-	return seq;
+  return seq;
 }
 
 __global__ void DistanciaEdicao(int n, int m, char *S, char *R, int *D)
