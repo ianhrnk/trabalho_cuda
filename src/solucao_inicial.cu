@@ -14,7 +14,7 @@ __global__ void DistanciaEdicao(int n, int m, char *S, char *R, int *D);
 int main(int argc, char *argv[])
 {
   std::ifstream entrada (argv[1]);
-  int n, m, resultado;
+  int n, m, resultado = 0;
   char *h_S, *h_R;
 
   // Leitura do arquivo de entrada
@@ -40,12 +40,12 @@ int main(int argc, char *argv[])
   int *d_D;
   char *d_S, *d_R;
   cudaMalloc(&d_D, tamanho_grid * sizeof(int));
-  cudaMalloc(&d_S, (n+1) * sizeof(char));
-  cudaMalloc(&d_R, (m+1) * sizeof(char));
+  cudaMalloc(&d_S, (n+2) * sizeof(char));
+  cudaMalloc(&d_R, (m+2) * sizeof(char));
 
   // Copia as strings para a memória global do kernel
-  cudaMemcpy(d_S, h_S, (n+1) * sizeof(char), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_R, h_R, (m+1) * sizeof(char), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_S, h_S, (n+2) * sizeof(char), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_R, h_R, (m+2) * sizeof(char), cudaMemcpyHostToDevice);
 
   // Invoca o kernel
   int threadsPerBlock = n; // No máximo 1024
@@ -57,25 +57,21 @@ int main(int argc, char *argv[])
   std::cout << resultado << std::endl;
 
   // Libera matriz e strings
-  free(h_S);
-  free(h_R);
+  delete[] h_S;
+  delete[] h_R;
   cudaFree(d_D);
   cudaFree(d_S);
   cudaFree(d_R);
-
   return 0;
 }
 
 char *AlocaSequencia(int n)
 {
-  char *seq;
+  char *seq = new (std::nothrow) char[n+2];
 
-  seq = (char *) malloc((n+1) * sizeof(char));
-  if (seq == NULL)
-  {
-    std::cout << "Erro na alocação de estruturas!\n";
-    std::exit(1);
-  }
+  if (seq == nullptr)
+    std::cout << "Erro na alocação de memória!" << std::endl;
+
   seq[0] = ' ';
   return seq;
 }
