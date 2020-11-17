@@ -9,6 +9,7 @@
 #include <fstream>
 
 char *AlocaSequencia(int n);
+__global__ void InicializaVetor(int n, int m, int *D);
 __global__ void DistanciaEdicao(int n, int m, char *S, char *R, int *D);
 
 int main(int argc, char *argv[])
@@ -48,7 +49,15 @@ int main(int argc, char *argv[])
   cudaMemcpy(d_R, h_R, (m+2) * sizeof(char), cudaMemcpyHostToDevice);
 
   // Invoca o kernel
-  int threadsPerBlock = n; // No máximo 1024
+  int threadsPerBlock;
+  if (n > 1024)
+    threadsPerBlock = 1024;
+  else
+    thredsPerBlock = n;
+
+  InicializaVetor<<<1, 1>>>(n, m, d_D);
+  cudaDeviceSynchronize();
+
   DistanciaEdicao<<<1, threadsPerBlock>>>(n, m, d_S, d_R, d_D);
 
   cudaDeviceSynchronize();
@@ -76,22 +85,19 @@ char *AlocaSequencia(int n)
   return seq;
 }
 
+__global__ void InicializaVetor(int n, int m, int *D)
+{
+  for (int i = 0, j = 0; i < (n+1) * (m+1); i += m+1, ++j)
+    D[i] = j;
+  for (int j = 0; j <= m; ++j)
+    D[j] = j;
+}
+
 __global__ void DistanciaEdicao(int n, int m, char *S, char *R, int *D)
 {
   int a, b, c, t, min;
   int nADiag = n + m - 1;
   int i = threadIdx.x + 1, j;
-
-  // Inicialização da matriz
-  if (threadIdx.x == 0)
-  {
-    for (int i = 0, j = 0; i < (n+1) * (m+1); i += m+1, ++j)
-      D[i] = j;
-    for (int j = 0; j <= m; ++j)
-      D[j] = j;
-  }
-
-  __syncthreads();
 
   // Para cada anti-diagonal
 	for (int aD = 2; aD <= nADiag + 1; aD++)
