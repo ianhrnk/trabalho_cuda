@@ -13,8 +13,7 @@ const int MAX_THREADS = 1024;
 char *AlocaSequencia(int n);
 __global__ void InicializaMatriz(int n, int m, int *D);
 __global__ void CalculaDistanciaEdicao(int num_linhas, int num_colunas,
-                                      int desloc_linha, int desloc_coluna,
-                                      int n, int m,
+                                      int antidiag_bloco, int n, int m,
                                       char *S, char *R, int *D);
 
 int main(int argc, char *argv[])
@@ -45,56 +44,36 @@ int main(int argc, char *argv[])
   int num_blocos_n = (n + MAX_THREADS - 1) / MAX_THREADS;
   int num_blocos_m = (m + MAX_THREADS - 1) / MAX_THREADS;
 
-  // Aloca a matriz e as strings na memória global da GPU
+  // Aloca a matriz, as strings e copia as strings para a memória global da GPU
   int *d_D;
   char *d_S, *d_R;
   cudaMalloc((void **)&d_D, tam_vetor * sizeof(int));
   cudaMalloc(&d_S, (n+2) * sizeof(char));
   cudaMalloc(&d_R, (m+2) * sizeof(char));
-
-  // Copia as strings para a memória global da GPU
   cudaMemcpy(d_S, h_S, (n+2) * sizeof(char), cudaMemcpyHostToDevice);
   cudaMemcpy(d_R, h_R, (m+2) * sizeof(char), cudaMemcpyHostToDevice);
 
   InicializaMatriz<<<1, 1>>>(n, m, d_D);
   cudaDeviceSynchronize();
 
-  int threads_por_bloco = n;
-  if (n > MAX_THREADS)
-    threads_por_bloco = MAX_THREADS;
-
+  int threads_por_bloco = (n < MAX_THREADS ? n : MAX_THREADS);
   int num_antidiag = num_blocos_n + num_blocos_m - 1;
-  int num_linhas = threads_por_bloco, num_colunas = m;
+  int num_linhas = threads_por_bloco;
+  int num_colunas = (m < 1024 ? m : 1024);
 
-  if (m > 1024)
-    num_colunas = 1024;
-
-  // Para cada anti-diagonal
+  // Para cada antidiagonal por bloco
   for (int antidiag = 0; antidiag < num_antidiag; ++antidiag)
   {
-    int desloc_linha = 0;
-    int desloc_coluna = antidiag * num_colunas;
+    CalculaDistanciaEdicao<<<num_blocos_n, threads_por_bloco>>>
+    (num_linhas, num_colunas, antidiag, n, m, d_S, d_R, d_D);
 
-    for (int bloco = 0; bloco < num_blocos_n; ++bloco)
-    {
-      // Se o bloco é válido - Isto implica em dizer se o bloco contém um pedaço da matriz
-      if (desloc_coluna >= 0 && desloc_coluna < num_blocos_m * num_colunas)
-        if (desloc_linha < num_blocos_n * num_linhas)
-        {
-          CalculaDistanciaEdicao<<<1, threads_por_bloco>>>(num_linhas, num_colunas,
-          desloc_linha, desloc_coluna, n, m, d_S, d_R, d_D);
-        }
-
-      desloc_linha += num_linhas;
-      desloc_coluna -= num_colunas;
-    }
     cudaDeviceSynchronize();
   }
 
   cudaMemcpy(&resultado, &d_D[tam_vetor - 1], sizeof(int), cudaMemcpyDeviceToHost);
-  std::cout << "Resultado: "<< resultado << std::endl;
+  std::cout << resultado << std::endl;
 
-  // Libera o vetor e as strings
+  // Libera a matriz e as strings
   delete[] h_S;
   delete[] h_R;
   cudaFree(d_D);
@@ -124,30 +103,34 @@ __global__ void InicializaMatriz(int n, int m, int *D)
 }
 
 __global__ void CalculaDistanciaEdicao(int num_linhas, int num_colunas,
-                                      int desloc_linha, int desloc_coluna,
-                                      int n, int m,
+                                      int antidiag_bloco, int n, int m,
                                       char *S, char *R, int *D)
 {
-  int a, b, c, t, min;
+  // A quantidade de colunas que se deve pular para chegar até as células do bloco
+  int deslocamento_col = (antidiag_bloco * num_colunas) - (blockIdx.x * num_colunas);
   int num_antidiag = num_linhas + num_colunas - 1;
-  int i = desloc_linha + threadIdx.x + 1, j;
+  int i = (blockIdx.x * num_linhas) + threadIdx.x + 1, j;
+  int a, b, c, t, min;
 
-  // Para cada antidiagonal
-	for (int antidiag = 2; antidiag <= num_antidiag + 1; antidiag++)
-	{
-    j = desloc_coluna + antidiag - (threadIdx.x + 1);
-    // Se é uma célula válida
-    if (i <= n && j > desloc_coluna && j <= desloc_coluna + num_colunas)
+  // Se o bloco é válido - Isto implica em dizer se o bloco contém parte da matriz
+  if (deslocamento_col >= 0 && deslocamento_col < m)
+  {
+    for (int antidiag = 2; antidiag <= num_antidiag + 1; antidiag++)
     {
-      t = (S[i] != R[j] ? 1 : 0);
-      a = D[i*(m+1)+j-1] + 1;
-      b = D[(i-1)*(m+1)+j] + 1;
-      c = D[(i-1)*(m+1)+j-1] + t;
+      j = deslocamento_col + antidiag - (threadIdx.x + 1);
+      // Se é uma célula válida
+      if (i <= n && j > deslocamento_col && j <= deslocamento_col + num_colunas)
+      {
+        t = (S[i] != R[j] ? 1 : 0);
+        a = D[i*(m+1)+j-1] + 1;
+        b = D[(i-1)*(m+1)+j] + 1;
+        c = D[(i-1)*(m+1)+j-1] + t;
 
-      min = (a < b ? a : b);
-      min = (c < min ? c : min);
-      D[i*(m+1)+j] = min;
+        min = (a < b ? a : b);
+        min = (c < min ? c : min);
+        D[i*(m+1)+j] = min;
+      }
+      __syncthreads();
     }
-    __syncthreads();
   }
 }
