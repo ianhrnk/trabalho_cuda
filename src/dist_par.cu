@@ -7,6 +7,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <iomanip>
 
 const int MAX_THREADS = 1024;
 
@@ -44,12 +45,20 @@ int main(int argc, char *argv[])
   int num_blocos_n = (n + MAX_THREADS - 1) / MAX_THREADS;
   int num_blocos_m = (m + MAX_THREADS - 1) / MAX_THREADS;
 
-  // Aloca a matriz, as strings e copia as strings para a memória global da GPU
+  // Aloca a matriz e as strings na GPU
   int *d_D;
   char *d_S, *d_R;
   cudaMalloc((void **)&d_D, tam_vetor * sizeof(int));
   cudaMalloc(&d_S, (n+2) * sizeof(char));
   cudaMalloc(&d_R, (m+2) * sizeof(char));
+
+  // Inicio da medição de tempo
+  cudaEvent_t d_ini, d_fim;
+  cudaEventCreate(&d_ini);
+  cudaEventCreate(&d_fim);
+  cudaEventRecord(d_ini, 0);
+
+  // Copia as strings para a memória global da GPU
   cudaMemcpy(d_S, h_S, (n+2) * sizeof(char), cudaMemcpyHostToDevice);
   cudaMemcpy(d_R, h_R, (m+2) * sizeof(char), cudaMemcpyHostToDevice);
 
@@ -71,7 +80,18 @@ int main(int argc, char *argv[])
   }
 
   cudaMemcpy(&resultado, &d_D[tam_vetor - 1], sizeof(int), cudaMemcpyDeviceToHost);
-  std::cout << resultado << std::endl;
+
+  // Fim da medição de tempo
+  cudaEventRecord(d_fim, 0);
+  cudaEventSynchronize(d_fim);
+  float d_tempo;
+  cudaEventElapsedTime(&d_tempo, d_ini, d_fim);
+  cudaEventDestroy(d_ini);
+  cudaEventDestroy(d_fim);
+
+  std::cout << std::fixed << std::setprecision(2);
+  std::cout << "Tempo de execução: " << d_tempo << " ms" << std::endl;
+  std::cout << "Distância de edição: " << resultado << std::endl;
 
   // Libera a matriz e as strings
   delete[] h_S;
